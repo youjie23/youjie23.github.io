@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="utf-8">
+  
+
+  
+  <title>A Simple Blog</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="G1的Refine线程名词释义：  Refine线程：ConcurrentG1RefineThread主要指处理RSet的线程  记忆集与卡表 Rset和卡表是为了记录对象在不同代际之间的引用关系 目的是在垃圾回收时能够快速地找到活跃对象 而不必遍历整个堆空间 两种方法记录引用关系 Point Out &amp;amp;  Point In Point out记录操作简单 但需要对Rset做全部扫描 Po">
+<meta property="og:type" content="article">
+<meta property="og:title" content="A Simple Blog">
+<meta property="og:url" content="http://youjielee.com/2020/02/10/《JVM G1源码分析及调优》读书笔记3/index.html">
+<meta property="og:site_name" content="A Simple Blog">
+<meta property="og:description" content="G1的Refine线程名词释义：  Refine线程：ConcurrentG1RefineThread主要指处理RSet的线程  记忆集与卡表 Rset和卡表是为了记录对象在不同代际之间的引用关系 目的是在垃圾回收时能够快速地找到活跃对象 而不必遍历整个堆空间 两种方法记录引用关系 Point Out &amp;amp;  Point In Point out记录操作简单 但需要对Rset做全部扫描 Po">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2020-02-09T15:25:03.994Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="A Simple Blog">
+<meta name="twitter:description" content="G1的Refine线程名词释义：  Refine线程：ConcurrentG1RefineThread主要指处理RSet的线程  记忆集与卡表 Rset和卡表是为了记录对象在不同代际之间的引用关系 目的是在垃圾回收时能够快速地找到活跃对象 而不必遍历整个堆空间 两种方法记录引用关系 Point Out &amp;amp;  Point In Point out记录操作简单 但需要对Rset做全部扫描 Po">
+  
+    <link rel="alternate" href="/atom.xml" title="A Simple Blog" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+</html>
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">A Simple Blog</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://youjielee.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-《JVM G1源码分析及调优》读书笔记3" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记3/" class="article-date">
+  <time datetime="2020-02-09T16:29:30.723Z" itemprop="datePublished">2020-02-10</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h1 id="G1的Refine线程"><a href="#G1的Refine线程" class="headerlink" title="G1的Refine线程"></a>G1的Refine线程</h1><p>名词释义：</p>
+<ul>
+<li>Refine线程：ConcurrentG1RefineThread主要指处理RSet的线程</li>
+</ul>
+<h2 id="记忆集与卡表"><a href="#记忆集与卡表" class="headerlink" title="记忆集与卡表"></a>记忆集与卡表</h2><ul>
+<li>Rset和卡表是为了记录对象在不同代际之间的引用关系 目的是在垃圾回收时能够快速地找到活跃对象 而不必遍历整个堆空间</li>
+<li>两种方法记录引用关系 Point Out &amp;  Point In<ul>
+<li>Point out记录操作简单 但需要对Rset做全部扫描</li>
+<li>Point in记录操作复杂 但在标记扫描时能直接找到有用和无用的对象 不需要额外扫描 因为RSet里边的对象可以认为就是根对象<ul>
+<li>G1收集器里边 使用了Point In的方法 算法可以简化为找到需要收集的分区集合 所以YGC扫描Root Set 和Rset就可以了 </li>
+</ul>
+</li>
+</ul>
+</li>
+<li>简单的方式是在Rset里记录所有的引用关系 但并不是最优的设计方案 故需要优化<ul>
+<li>需要额外的内存空间：通常是JVM最大的额外开销 一般在1%~20%之间</li>
+<li>可能导致浮动垃圾：由于根据RSet回收 而RSet里边的对象可能已经死亡 被误认为是活跃对象</li>
+</ul>
+</li>
+<li>分析哪些引用关系需要记录在RSet中<ul>
+<li>分区内部有引用：<strong>不需要</strong> 回事是针对一个分区而言 要么都回收 要么都不回收</li>
+<li>新生代分区至新生代分区有引用：<strong>不需要</strong> G1的三种回收算法都会全量处理新生代分区</li>
+<li>新生代分区到老年代分区有引用：<strong>不需要</strong> YGC针对新生代分区 不需要 Mix会以新生代分区作为根 Full对全分区处理 也不需要</li>
+<li>老年代分区到新生代分区有引用：<strong>需要</strong> YGC是有两种根 一种是栈空间/全局空间变量的引用 第二种即为老年代分区到新生代分区的引用</li>
+<li>老年代分区到老生代分区有引用：<strong>需要</strong> 混合GC时只有部分老年代分区被回收所以必须记录引用关系 快速找到哪些对象时活跃的</li>
+</ul>
+</li>
+<li>PRT：记录每个分区所有引用者的信息 的数据结构<code>HeapRegion.HeapRegionRemSet.OtherRegionsTable</code>   <code>PerRegionTable</code> 每个HeapRegion都包含有一个PRT   有三种不同的粒度实现  引用的次数可能很多也可能很少 为了提高效率 采用了动态化的数据结构存储<ul>
+<li>稀疏PRT： 通过哈希表方式 默认长度是4 </li>
+<li>细粒度PRT： 通过PRT指针的指针 可以理解为是PRT指针的数组 数组长度可指定也自动计算 PTR=HeapRegion的起始位置加上一个位图（描述分区的引用关系 大小为HeapRegionSize/512）</li>
+<li>粗粒度PRT：通过位图标识 每一位标识对应的分区有引用到该分区数据结构</li>
+<li>以上三类前者最大值被突破之后 开启下一等级粒度处理PRT</li>
+</ul>
+</li>
+</ul>
+<h2 id="Refine线程的功能和原理"><a href="#Refine线程的功能和原理" class="headerlink" title="Refine线程的功能和原理"></a>Refine线程的功能和原理</h2><ul>
+<li>是G1新引入的并发线程池 默认数目为 G1ConcRefinementThread+1 有以下两大功能</li>
+<li>处理新生代分区的抽样并在满足响应时间的指标下更新YHR的数目 通常由一个线程来处理</li>
+<li>管理RSet 这是Refine最主要的功能 RSet的更新并不是同步完成的<ul>
+<li>G1会把所有的引用关系都先放入到一个队列中成为DCQ（dirty card queue） 然后使用线程来消费这个队列已完成更新 正常来说有G1ConcRefinementThread个线程处理（实际除了Refine线程之外 GC线程或者Mutator线程也可能会更新RSet —并发编程模式中的线程窃取） DCQ通过DCQS管理 每个Refine线程并发地负责DCQS中的某几个DCQ </li>
+</ul>
+</li>
+</ul>
+<h3 id="抽样线程"><a href="#抽样线程" class="headerlink" title="抽样线程"></a>抽样线程</h3><p>Refine线程池的最后一个线程就是抽样线程 他的主要作用是设置新生代的个数 使G1满足垃圾回收的预测停顿时间 在预测时 需要同时考虑最小分区的下限和上限</p>
+<h3 id="管理RSet"><a href="#管理RSet" class="headerlink" title="管理RSet"></a>管理RSet</h3><p>G1中使用Refine线程<strong>异步</strong>地维护和管理引用关系</p>
+<p>每个Mutator线程有个私有的队列（G1UpdateBufferSize 默认256）DCQ 当队列满（也可手工提交）则将这个队列通过JavaThread中的静态方法找到全局DCQS放到<strong>全局的DCQS</strong>中  后续此线程的对象应用关系直接放入到DCQ中</p>
+<p>当DCQS中DCQ的个数大于一个阈值（GreenZone）通过全局Monitor发送Notify通知0号Refine线程启动 </p>
+<p>如果DCQS满了 Mutator就不继续往DCQS中添加（说明引用太多了 Refine线程负责太重） 这个Mutator就会暂停其他代码执行 替代Refine线程来更新RSet 这个就产生了业务暂停</p>
+<p>DCQS队列长度依赖于Refine线程的个数 最大为RedZone的个数</p>
+<p>Refine线程的初始化是在GC管理器初始化的时候进行  但如果没有足够多的引用关系变更 这些Refine线程都是空转 所以需要有一个机制能动态激活和冻结线程 JVM通过wait和notify机制实现：0~n-1线程 前一个线程忙 激活下一个 后一个线程自己空闲主动冻结自己 如前所述<strong>0号线程由Mutator激活</strong> 故0号等待的Monitor也是全局变量 其他线程中的Monitor为局部变量</p>
+<h2 id="RefineZone"><a href="#RefineZone" class="headerlink" title="RefineZone"></a>RefineZone</h2><p>基于RSet空间及Mutator暂停业务线程考虑 我们可以设置多个Refine线程工作 在不同的时间负载下启用的线程不同 通过Refinement Zone控制 G1提供三个值 分别是Green Yellow和Red 将整个Queue set划分为4个区 白 绿 黄 和红</p>
+<ul>
+<li>白区：Refine不处理 交由GC线程处理DCQ</li>
+<li>绿区：Refine线程开始启动 并且根据queue set数值的大小启动不同数量的Refine线程来处理DCQ</li>
+<li>黄区：所有的Refine线程（除了抽样线程）都参与DCQ处理</li>
+<li><p>红区：不仅仅Refine线程参与处理RSet Mutator也参与处理DCQ</p>
+</li>
+<li><p>参数设置规则：G1ConcRefinementGreenZone G1ConcRefinementYellowZone G1ConcRefinementRedZone 默认为0 自动推导 推导规则为</p>
+</li>
+<li><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">G1ConcRefinementGreenZone=ParallelGCThreads </span><br><span class="line">G1ConcRefinementYellowZone=3 * G1ConcRefinementGreenZone </span><br><span class="line">G1ConcRefinementRedZone=6 * G1ConcRefinementGreenZone</span><br></pre></td></tr></table></figure>
+</li>
+</ul>
+<h2 id="RSet涉及的写屏障"><a href="#RSet涉及的写屏障" class="headerlink" title="RSet涉及的写屏障"></a>RSet涉及的写屏障</h2><p>Refine引用关系的变更即对象的赋值对反馈在RSet中 需要写屏障：在改变特定内存的值是额外执行的一些动作 如每一次讲一个新生代对象的引用修改为只想新生代对象 都会被写屏障捕获 并且记录下来 因此在新生代回收的时候可以避免扫描整个老年代来查找根</p>
+<p>G1垃圾回收器的RSet在写变更的时候通过插入一段额外的代码把引用关系放入到DCQ中 随后Refine线程更新RSet 记录堆分区内部中对象的指针 目前是操作之后 而对于写屏障来说 过来掉不必要的操作是十分必要的 技能几块复制器的速度也能减轻回收器的负担 G1有三重过滤</p>
+<ul>
+<li><p>不记录新生代到新生代或老年代的引用 没有必要（详细讨论参见G1笔记文章2 ）在写屏障时过滤</p>
+</li>
+<li><p>过滤同一个分区内部引用 在RSet处理时过滤</p>
+</li>
+<li>过滤掉空引用 在RSet处理时过滤</li>
+</ul>
+<blockquote>
+<p>由于G1对写屏障的复杂操作要比CMS消耗更多的运算资源 所以CMS的写屏障是直接的同步操作 而G1就不得不将其实现为类似于消息队列的结构 异步完成</p>
+</blockquote>
+<p>G1垃圾回收器的写屏障使用一种两级的缓存结构（用queue set实现）</p>
+<ul>
+<li>线程queue set：所有的线程都会把写屏障的记录写写入到线程自由的queue set中装满之后 就会把queue set放到 后述的global set of filled queue中 而后再申请一个queue set</li>
+<li>的global set of filled queue：所有线程共享的一个全局的 存放填满了的DCQS的集合</li>
+</ul>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://youjielee.com/2020/02/10/《JVM G1源码分析及调优》读书笔记3/" data-id="ck6f91t370004rsre3zb4abv4" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+    <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记4/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          (no title)
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title"></div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list"><li class="tag-list-item"><a class="tag-list-link" href="/tags/github/">github</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/hexo/">hexo</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/npm/">npm</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/基础/">基础</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/github/" style="font-size: 10px;">github</a> <a href="/tags/hexo/" style="font-size: 10px;">hexo</a> <a href="/tags/npm/" style="font-size: 10px;">npm</a> <a href="/tags/基础/" style="font-size: 10px;">基础</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/02/">February 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/04/">April 2019</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记5/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记4/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记3/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2019/04/21/Hello-Hexo/">Hello Hexo</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2020 LYJ<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+
+
+  </div>
+</body>
+</html>

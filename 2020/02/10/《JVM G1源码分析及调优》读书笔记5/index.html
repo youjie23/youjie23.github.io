@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="utf-8">
+  
+
+  
+  <title>A Simple Blog</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="G1混合回收概述因为涉及老年代的回收 而老年代的空间一般都比较大 手机老年代可能会花费更多的时间 所以涉及老年代的混合手机算法也不同于新生代回收算法 最明显的就是引入了并发标记(标记工作线程与Mutator同时运行) 混合回收可以总结为两个阶段  并发标记 目的是识别老年代分区中的活跃对象 并计算分区中垃圾对象所占的多少 用于垃圾回收过程中判断是否回收分区 垃圾回收 这个过程和新生代回收的步骤完全">
+<meta property="og:type" content="article">
+<meta property="og:title" content="A Simple Blog">
+<meta property="og:url" content="http://youjielee.com/2020/02/10/《JVM G1源码分析及调优》读书笔记5/index.html">
+<meta property="og:site_name" content="A Simple Blog">
+<meta property="og:description" content="G1混合回收概述因为涉及老年代的回收 而老年代的空间一般都比较大 手机老年代可能会花费更多的时间 所以涉及老年代的混合手机算法也不同于新生代回收算法 最明显的就是引入了并发标记(标记工作线程与Mutator同时运行) 混合回收可以总结为两个阶段  并发标记 目的是识别老年代分区中的活跃对象 并计算分区中垃圾对象所占的多少 用于垃圾回收过程中判断是否回收分区 垃圾回收 这个过程和新生代回收的步骤完全">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:updated_time" content="2020-02-09T16:28:40.175Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="A Simple Blog">
+<meta name="twitter:description" content="G1混合回收概述因为涉及老年代的回收 而老年代的空间一般都比较大 手机老年代可能会花费更多的时间 所以涉及老年代的混合手机算法也不同于新生代回收算法 最明显的就是引入了并发标记(标记工作线程与Mutator同时运行) 混合回收可以总结为两个阶段  并发标记 目的是识别老年代分区中的活跃对象 并计算分区中垃圾对象所占的多少 用于垃圾回收过程中判断是否回收分区 垃圾回收 这个过程和新生代回收的步骤完全">
+  
+    <link rel="alternate" href="/atom.xml" title="A Simple Blog" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+</html>
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">A Simple Blog</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://youjielee.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-《JVM G1源码分析及调优》读书笔记5" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记5/" class="article-date">
+  <time datetime="2020-02-09T16:29:30.727Z" itemprop="datePublished">2020-02-10</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h1 id="G1混合回收"><a href="#G1混合回收" class="headerlink" title="G1混合回收"></a>G1混合回收</h1><h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>因为涉及老年代的回收 而老年代的空间一般都比较大 手机老年代可能会花费更多的时间 所以涉及老年代的混合手机算法也不同于新生代回收算法 最明显的就是引入了<strong>并发标记</strong>(标记工作线程与Mutator同时运行)</p>
+<p>混合回收可以总结为两个阶段</p>
+<ul>
+<li>并发标记 目的是识别老年代分区中的活跃对象 并计算分区中垃圾对象所占的多少 用于垃圾回收过程中判断是否回收分区</li>
+<li>垃圾回收 这个过程和新生代回收的步骤完全一致 重用了新生代回收的代码 最大的不同时在回收时不仅仅回收新生代分区 同时回收并发标记中识别到的<strong>垃圾多</strong>的老年代分区</li>
+</ul>
+<h2 id="并发标记算法详解"><a href="#并发标记算法详解" class="headerlink" title="并发标记算法详解"></a>并发标记算法详解</h2><p>在堆分区分配对象的时候 对象都是联系分配的  没有填充满的TLAB填充一个dummy的Int数组 所以设计几个滋镇分别是<code>Bottom</code> <code>Pre</code>  <code>Next</code> 和<code>Top</code> 用Prev指针指向<strong>上一次</strong>并发处理后的地址 用Next指向并发标记开始之前内存已经分配成功的地址 党鞭法标记开始之后 如果有新的对象分配 可以移动Top指针 使Top指针指向当前内存分配成功的地址 Next指针和Top指针之间的地址就是Mutator新增的对象使用的地址 当并发标记结束之后 只需要把<code>Prev</code>指针设置为<code>Next</code>指针即可开始新一轮的标记处理</p>
+<p><code>Prev</code> 和<code>Next</code> 指针解决了并发标记<strong>工作内存区域</strong>的问题 还需要再引入两个额外的数据结构来记录内存标记的状态 典型的是使用位图来只是哪块内存已经使用 哪块内存还未使用 所以并发标记引入两个位图<code>PrevBitMap</code>和NextBitMap 用PrevBitmap记录prev指针之前内存的标记状况 用<code>NextBitmap</code>来标识整个内存到<code>next</code>指针之前的标记状态 </p>
+<blockquote>
+<p>既然NextBitmap包含了整个使用内存的标记状态 为什么要引入PrevBitmap这个数据结构</p>
+<p>如果并发标记每次都成功 我们确实可以不需要PrevBitmap 只需要根据这个BitMapjinx 清除即可</p>
+<p>但如果标记失败 我们将丢失上一次对Prev指针之前所有内存的标记状况 即当发生失败不能完成并发标记时需要重新标记整个内存 “明显有问题”</p>
+</blockquote>
+<h2 id="并发标记算法的难点"><a href="#并发标记算法的难点" class="headerlink" title="并发标记算法的难点"></a>并发标记算法的难点</h2><p>并发标记的主要问题是垃圾回收器在标记对象的过程中 Mutator可能正在改变对象关系图 从而造成漏标和错标 错标不会影响程序的正确性 只会造成所谓的<strong>浮动垃圾</strong> 但漏标则会导致科大对象被当做垃圾手机掉 从而影响程序的正确性  为了区别对象的不同状态 引入了三色标记法</p>
+<ul>
+<li>白色：标识对象尚未被垃圾收集器访问过</li>
+<li>黑色：表示对象已经被垃圾收集器访问过 且这个对象的所有引用都已经被扫描过</li>
+<li>灰色：标识对象已经被垃圾收集器访问过 但这个对象上至少存在一个引用还没有被扫描过</li>
+<li>对象消失问题：原本应该是黑色的对象被<strong>误标</strong>为白色 当且仅当同时满足两个条件 只需要破坏其一即可<ul>
+<li>赋值器插入了一条或多条从黑色对象到白色对象的新引用<ul>
+<li>CMS的增量更新方案：黑色对象一旦新插入了只想白色对象的引用之后 就变成灰色</li>
+</ul>
+</li>
+<li>赋值器删除了全部灰色对象到该白色对象的直接或者间接引用<ul>
+<li>G1的原始快照SATB方案：无论运用关系删除与否 都会按照刚刚开始扫描那一刻的对象图快照进行搜索</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="G1混合回收的步骤"><a href="#G1混合回收的步骤" class="headerlink" title="G1混合回收的步骤"></a>G1混合回收的步骤</h2><ul>
+<li>第一阶段：并发标记<ul>
+<li>初始标记子阶段<ul>
+<li>负责标记所有直接科大的跟对象（栈对象、全局对象、JNI对象等） 根式对象图的起点 引起初始标记需要将Mutator线程暂停 即STW 混合手机中的初始标记与新生代的初始标记几乎一样 实际上混合手机的初始标记时借用了新生代手机的结果 即新生代垃圾回收后的新生代Survivor分区作为根 所以混合手机一定发生在新生代回收之后 且不需要再进行一次初始标记</li>
+</ul>
+</li>
+<li>并发标记子阶段</li>
+<li>再标记子阶段</li>
+<li>清理子阶段</li>
+</ul>
+</li>
+<li>第二阶段：垃圾回收</li>
+</ul>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://youjielee.com/2020/02/10/《JVM G1源码分析及调优》读书笔记5/" data-id="ck6f91t3f0006rsreaqw9huwo" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+  
+    <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记4/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title"></div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list"><li class="tag-list-item"><a class="tag-list-link" href="/tags/github/">github</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/hexo/">hexo</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/npm/">npm</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/基础/">基础</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/github/" style="font-size: 10px;">github</a> <a href="/tags/hexo/" style="font-size: 10px;">hexo</a> <a href="/tags/npm/" style="font-size: 10px;">npm</a> <a href="/tags/基础/" style="font-size: 10px;">基础</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/02/">February 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/04/">April 2019</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记5/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记4/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记3/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2019/04/21/Hello-Hexo/">Hello Hexo</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2020 LYJ<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+
+
+  </div>
+</body>
+</html>

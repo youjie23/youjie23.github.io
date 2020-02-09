@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="utf-8">
+  
+
+  
+  <title>A Simple Blog</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="《JVM G1源码分析及调优》读书笔记1准备JVM基础回顾 详见《垃圾回收及内存分配》 垃圾回收算法分为：标记清除 复制 标记压缩 垃圾回收方法分为：串行回收、并行回收、并发回收 内存管理上分为：代管理和非代管理 概述G1与历史回收器差别在与 后者针对堆空间的管理方式都是连续的 连续的内存将导致垃圾回收时间过长 停顿时间不可控，因此G1将堆拆分成一系列的分区，在一个时间段内，大部分的垃圾收集操作只">
+<meta property="og:type" content="article">
+<meta property="og:title" content="A Simple Blog">
+<meta property="og:url" content="http://youjielee.com/2020/02/10/《JVM G1源码分析及调优》读书笔记/index.html">
+<meta property="og:site_name" content="A Simple Blog">
+<meta property="og:description" content="《JVM G1源码分析及调优》读书笔记1准备JVM基础回顾 详见《垃圾回收及内存分配》 垃圾回收算法分为：标记清除 复制 标记压缩 垃圾回收方法分为：串行回收、并行回收、并发回收 内存管理上分为：代管理和非代管理 概述G1与历史回收器差别在与 后者针对堆空间的管理方式都是连续的 连续的内存将导致垃圾回收时间过长 停顿时间不可控，因此G1将堆拆分成一系列的分区，在一个时间段内，大部分的垃圾收集操作只">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:image" content="https://bbs-img.huaweicloud.com/blogs/img/1576818812657009.png">
+<meta property="og:image" content="https://bbs-img.huaweicloud.com/blogs/img/1576819408276194.png">
+<meta property="og:updated_time" content="2020-02-07T16:51:56.904Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="A Simple Blog">
+<meta name="twitter:description" content="《JVM G1源码分析及调优》读书笔记1准备JVM基础回顾 详见《垃圾回收及内存分配》 垃圾回收算法分为：标记清除 复制 标记压缩 垃圾回收方法分为：串行回收、并行回收、并发回收 内存管理上分为：代管理和非代管理 概述G1与历史回收器差别在与 后者针对堆空间的管理方式都是连续的 连续的内存将导致垃圾回收时间过长 停顿时间不可控，因此G1将堆拆分成一系列的分区，在一个时间段内，大部分的垃圾收集操作只">
+<meta name="twitter:image" content="https://bbs-img.huaweicloud.com/blogs/img/1576818812657009.png">
+  
+    <link rel="alternate" href="/atom.xml" title="A Simple Blog" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+</html>
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">A Simple Blog</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://youjielee.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main"><article id="post-《JVM G1源码分析及调优》读书笔记" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记/" class="article-date">
+  <time datetime="2020-02-09T16:29:30.642Z" itemprop="datePublished">2020-02-10</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h1 id="《JVM-G1源码分析及调优》读书笔记1"><a href="#《JVM-G1源码分析及调优》读书笔记1" class="headerlink" title="《JVM G1源码分析及调优》读书笔记1"></a>《JVM G1源码分析及调优》读书笔记1</h1><h2 id="准备"><a href="#准备" class="headerlink" title="准备"></a>准备</h2><p>JVM基础回顾 详见《垃圾回收及内存分配》</p>
+<p>垃圾回收算法分为：标记清除 复制 标记压缩</p>
+<p>垃圾回收方法分为：串行回收、并行回收、并发回收</p>
+<p>内存管理上分为：代管理和非代管理</p>
+<h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>G1与历史回收器差别在与 后者针对堆空间的管理方式都是连续的 连续的内存将导致垃圾回收时间过长 停顿时间不可控，因此G1将堆拆分成一系列的分区，在一个时间段内，大部分的垃圾收集操作只针对一部分分区，而不是整个堆或者老年代</p>
+<ul>
+<li>G1 会根据预测时间动态改变新生代的大小 –G1以预测时间为导向</li>
+<li>G1老年代的收集不会为了释放老年代的空间对整个老年代做回收，在任意时刻只有一部分老年代分区会被回收，并且 这部分老年代分区将在<strong>下一次</strong>增量回收时与<strong>所有的新生代</strong>一起被收集 即混合回收 在选择老年代分区的时候 优先考虑垃圾多的分区</li>
+</ul>
+<p>实现角度看 G1是复合算法 吸收了以下算法的优势</p>
+<ul>
+<li>列车算法 对内存进行分区</li>
+<li>CMS 对分区进行并发标记</li>
+<li>最老优先 最老的数据优先收集</li>
+</ul>
+<h2 id="G1的基本概念"><a href="#G1的基本概念" class="headerlink" title="G1的基本概念"></a>G1的基本概念</h2><h3 id="分区"><a href="#分区" class="headerlink" title="分区"></a>分区</h3><p>大概分为4类</p>
+<ul>
+<li>自由分区</li>
+<li>新生代分区</li>
+<li>大对象分区<ul>
+<li>大对象头分区</li>
+<li>大对象连续分区</li>
+</ul>
+</li>
+<li>老年代分区</li>
+</ul>
+<p>HR大小的下限1M 上限32M （1、2、4、8、16、32M） 默认堆分区2048个  HR大小支持启发式推断</p>
+<p>G1大对象不进入新生代空间 直接进入老年代  大小为region_size的一半</p>
+<p>设置新生代大小：G1NewSizePercent~G1MaxNewSizePercent</p>
+<ul>
+<li>新生代不会动态变化意味着G1后续对新生代垃圾回收的时候可能不能满足期望停顿的时间</li>
+</ul>
+<h3 id="G1停顿预测模型"><a href="#G1停顿预测模型" class="headerlink" title="G1停顿预测模型"></a>G1停顿预测模型</h3><p>衰减平均数学方法 核心是近期的数据给予更高的权重</p>
+<h3 id="卡表与位图"><a href="#卡表与位图" class="headerlink" title="卡表与位图"></a>卡表与位图</h3><p>记录分区Region互相引用关系</p>
+<p>做法两种：</p>
+<p>1、遍历整个A区 按字移动（因字节对齐故不需要按字节移动）或优化为按对象移动（参照上一章OopMap）效率太低</p>
+<p>2、借助额外的数据结构描述这个关系 类似位图的卡表</p>
+<p>卡表：引入目的是为了对内存的引用关系做标记 从而根据引用关系快速便利活跃对象 </p>
+<p> 优化：1个位只能描述两个状态 不够 增加至一个字节描述状态一个字 但开销达到25% JVM选择512字节</p>
+<p>1个位描述一个字：32位机器（一个字位32位）需要<strong>32KB</strong>描述1M(32KB*32=1M) </p>
+<p>1字节描述一个位：32位机器（一个字位32位）需要<strong>256KB</strong>描述1M((256KB/8)*32=1M) </p>
+<p>1字节描述512字节：32位机器（一个字位32位）需要<strong>2KB</strong>描述1M((256KB/8)*32=1M)  <strong>涉及多次引用 使用时候再遍历</strong> </p>
+<h3 id="对象头"><a href="#对象头" class="headerlink" title="对象头"></a>对象头</h3><p>对象数据结构=对象头+实例数据+对齐填充</p>
+<p>对象头=标记信息+元数据</p>
+<h4 id="标记信息"><a href="#标记信息" class="headerlink" title="标记信息"></a>标记信息</h4><p>在32位JVM中用32位进行描述 组合情况如下 与GC有关的是标记位11 对应前边30位用在对象复制转移</p>
+<p><img src="https://bbs-img.huaweicloud.com/blogs/img/1576818812657009.png" alt></p>
+<h4 id="元数据"><a href="#元数据" class="headerlink" title="元数据"></a>元数据</h4><p>对应全局OopMap 每个InstanceKlass对象中也维护了一个Map（OopMapBlock）标识引用或立即数 用于确认</p>
+<h3 id="线程"><a href="#线程" class="headerlink" title="线程"></a>线程</h3><p><img src="https://bbs-img.huaweicloud.com/blogs/img/1576819408276194.png" alt></p>
+<ul>
+<li><p>JavaThread ：执行Java代码的线程</p>
+<ul>
+<li>CompilerThread ：执行JIT的线程</li>
+</ul>
+</li>
+<li><p>WatcherThread ：执行周期任务的线程 比如内存管理小对象ChunkPool的清理和内存 抽样任务          </p>
+<p>MemProfilerTask等</p>
+</li>
+<li><p>NameThread：JVM内部使用线程</p>
+<ul>
+<li>VMThread：JVM执行GC的同步线程 JVM最关键的线程之一 主要是处理垃圾回收 所有的垃圾回收操作都是从VMThread触发</li>
+</ul>
+</li>
+<li>ConcurrentGCThread：并发执行GC任务的线程 比如G1中的ConcurrentMarkThread和COncurrentG1RefineThread 分别处理并发标记和并发Refine</li>
+<li>WorkerThread：工作线程，并发执行 可以理解为是一个线程池 里边线程执行GC任务（G1ParTask），VMThread会触发这些任务的调度执行</li>
+</ul>
+<blockquote>
+<p>1、G1中不要设置MaxNewSize、NewSize、Xmn和NewRatio  G1对内存的管理不是连续的 故重新分区代价不高   最终要的  是G1的目标满足垃圾收集停顿 这需要G1根据停顿时间动态调整收集了分区</p>
+<p>2、MaxGCPauseMillis：期望停顿时间 可根据系统配置和业务动态调整</p>
+<p>3、G1ReservePercent：新生代保留内存（默认10个）即在初始化或者内存扩展/收缩是计算更新有多少分区是保留的</p>
+</blockquote>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://youjielee.com/2020/02/10/《JVM G1源码分析及调优》读书笔记/" data-id="ck6f91t3i0008rsrehao4ik19" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+    <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记3/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          (no title)
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2019/04/21/Hello-Hexo/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title">Hello Hexo</div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list"><li class="tag-list-item"><a class="tag-list-link" href="/tags/github/">github</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/hexo/">hexo</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/npm/">npm</a></li><li class="tag-list-item"><a class="tag-list-link" href="/tags/基础/">基础</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/github/" style="font-size: 10px;">github</a> <a href="/tags/hexo/" style="font-size: 10px;">hexo</a> <a href="/tags/npm/" style="font-size: 10px;">npm</a> <a href="/tags/基础/" style="font-size: 10px;">基础</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2020/02/">February 2020</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2019/04/">April 2019</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记5/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记4/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记3/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2020/02/10/《JVM G1源码分析及调优》读书笔记/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2019/04/21/Hello-Hexo/">Hello Hexo</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2020 LYJ<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+
+
+  </div>
+</body>
+</html>
